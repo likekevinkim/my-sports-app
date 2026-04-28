@@ -45,7 +45,7 @@ export default function LandingPage() {
         </div>
 
         <p className="mt-12 text-[10px] text-slate-300 font-bold tracking-widest uppercase">
-          © 2024 Hanseong-Baekje FC
+          Since 1976 Hanseong-Baekje FC
         </p>
       </div>
     </div>
