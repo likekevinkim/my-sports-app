@@ -35,7 +35,11 @@ function AssignContent() {
   const fetchData = async () => {
     if (!matchId) return;
     setLoading(true);
-    const { data } = await supabase.from('schedules').select('*').eq('match_id', matchId).order('time_slot', { ascending: true });
+    const { data } = await supabase
+      .from('schedules')
+      .select('*')
+      .eq('match_id', matchId)
+      .order('time_slot', { ascending: true });
 
     if (data && data.length > 0) {
       const formatted: ScheduleSlot[] = data.map((d: any) => ({
@@ -53,47 +57,77 @@ function AssignContent() {
     setLoading(false);
   };
 
-  // ✅ [복구] 자동 배정 알고리즘
+  // ✅ 핵심: 10명 강제 채우기 및 휴식 우선 배정 알고리즘
   const runAutoAssign = async () => {
     if (!matchId) return alert('경기 정보가 없습니다.');
     if (!confirm('기존 배정 내용이 초기화되고 새로 배정됩니다. 진행하시겠습니까?')) return;
     
     setLoading(true);
-    const { data: players } = await supabase.from('profiles').select('*');
+    const { data: allProfiles } = await supabase.from('profiles').select('*');
     const { data: attendance } = await supabase.from('attendance').select('*').eq('match_id', matchId);
 
-    if (!players || !attendance) {
+    if (!allProfiles || !attendance) {
       setLoading(false);
       return alert('데이터를 불러오지 못했습니다.');
     }
 
+    const attendingUserIds = attendance.map(a => a.user_id);
+    const attendingPlayers = allProfiles.filter(p => attendingUserIds.includes(p.id));
+
     let tempSchedule: ScheduleSlot[] = timeSlots.map(time => ({ time, players: [] }));
-    let playerCounts: any = {};
-    players.forEach(p => playerCounts[p.id] = 0);
+    let playerPlayCounts: Record<string, number> = {}; 
+    attendingPlayers.forEach(p => playerPlayCounts[p.id] = 0);
 
     timeSlots.forEach((time, idx) => {
-      const candidates = players.filter(p => {
+      const availableCandidates = attendingPlayers.filter(p => {
         const att = attendance.find(a => a.user_id === p.id);
-        const isResting = idx === 0 || !tempSchedule[idx - 1].players.find((sp: any) => sp.id === p.id);
-        return att?.available_times.includes(time) && isResting;
-      }).sort((a, b) => playerCounts[a.id] - playerCounts[b.id]);
+        return att?.available_times.includes(time);
+      });
 
-      const selected = candidates.slice(0, 10);
-      selected.forEach(p => playerCounts[p.id]++);
-      tempSchedule[idx].players = selected.map(p => ({ id: String(p.id), name: p.name }));
+      const prevSetPlayerIds = idx > 0 ? tempSchedule[idx - 1].players.map(p => String(p.id)) : [];
+
+      // 1순위: 쉬었던 사람, 2순위: 총 경기 수 적은 사람
+      const sortedCandidates = [...availableCandidates].sort((a, b) => {
+        const aIsResting = !prevSetPlayerIds.includes(String(a.id));
+        const bIsResting = !prevSetPlayerIds.includes(String(b.id));
+
+        if (aIsResting && !bIsResting) return -1;
+        if (!aIsResting && bIsResting) return 1;
+        return playerPlayCounts[a.id] - playerPlayCounts[b.id];
+      });
+
+      // 무조건 상위 10명 추출 (연속 경기 선수가 포함되더라도 10명을 채움)
+      const selected = sortedCandidates.slice(0, 10);
+      
+      selected.forEach(p => playerPlayCounts[p.id]++);
+      tempSchedule[idx].players = selected.map(p => ({ 
+        id: String(p.id), 
+        name: p.name,
+        skill_level: p.skill_level 
+      }));
     });
 
     setSchedule(tempSchedule);
     setLoading(false);
   };
 
-  // 드래그 핸들러 (기존과 동일)
-  const onDragStart = (player: Player, fromTime: string) => { if (isEditable) setDraggedPlayer({ player, fromTime }); };
+  const onDragStart = (player: Player, fromTime: string) => { 
+    if (isEditable) setDraggedPlayer({ player, fromTime }); 
+  };
+  
   const onDragOver = (e: React.DragEvent) => e.preventDefault();
+  
   const onDrop = (toTime: string) => {
     if (!draggedPlayer || !isEditable) return;
     const { player, fromTime } = draggedPlayer;
     if (fromTime === toTime) return;
+
+    // 중복 체크
+    const targetSlot = schedule.find(s => s.time === toTime);
+    if (targetSlot?.players.some(p => p.name === player.name)) {
+      alert(`⚠️ ${player.name} 선수는 이미 ${toTime} 세트에 있습니다.`);
+      return;
+    }
 
     setSchedule(prev => prev.map(slot => {
       if (slot.time === fromTime) return { ...slot, players: slot.players.filter(p => p.id !== player.id) };
@@ -116,7 +150,7 @@ function AssignContent() {
         avg_skill: 0 
       }));
       await supabase.from('schedules').insert(insertData);
-      alert('스쿼드가 최종 확정되었습니다! 🏆');
+      alert('스쿼드가 성공적으로 저장되었습니다! 🏆');
       setIsEditable(false);
     } catch (err: any) { alert(err.message); } finally { setSaving(false); }
   };
@@ -125,7 +159,6 @@ function AssignContent() {
     <div className="min-h-screen bg-slate-100 flex justify-center font-sans text-slate-900">
       <div className="w-full max-w-[430px] bg-white min-h-screen shadow-2xl flex flex-col p-6 overflow-y-auto">
         
-        {/* 헤더 */}
         <div className="mb-6 pt-4 flex justify-between items-start">
           <div className="flex-1">
             <button onClick={() => router.push('/admin/matches')} className="text-[10px] font-black text-slate-400 mb-2 uppercase tracking-widest">← Back to Matches</button>
@@ -139,31 +172,38 @@ function AssignContent() {
           </button>
         </div>
 
-        {/* ✅ [복구] 자동 배정 버튼: 수정 모드일 때만 노출 */}
         {isEditable && (
           <button 
             onClick={runAutoAssign}
             disabled={loading}
             className="w-full bg-blue-50 text-blue-600 py-4 rounded-[24px] font-black text-sm mb-8 border-2 border-blue-100 shadow-sm active:scale-95 transition-all"
           >
-            {loading ? '배정 계산 중...' : '⚡ 자동 배정 알고리즘 실행'}
+            {loading ? '배정 중...' : '⚡ 자동 배정 알고리즘 실행'}
           </button>
         )}
 
-        {/* 스쿼드 리스트 */}
         <div className="space-y-6 pb-32">
           {schedule.map((slot) => {
-            const isInvalidCount = slot.players.length !== 10;
+            const isShortage = slot.players.length < 10;
             return (
               <div 
                 key={slot.time}
                 onDragOver={onDragOver}
                 onDrop={() => onDrop(slot.time)}
-                className={`p-5 rounded-[32px] border-2 transition-all duration-300 ${isInvalidCount ? 'bg-yellow-50 border-yellow-100' : 'bg-slate-50 border-slate-50'}`}
+                className={`p-5 rounded-[32px] border-2 transition-all duration-300 ${isShortage ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-50'}`}
               >
                 <div className="flex justify-between items-center mb-4 px-1">
-                  <span className="font-black text-slate-800 text-lg">{slot.time} SET</span>
-                  <span className={`text-[10px] font-black px-2 py-1 rounded-full ${isInvalidCount ? 'bg-yellow-200 text-yellow-700' : 'bg-slate-200 text-slate-500'}`}>{slot.players.length}명</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-slate-800 text-lg">{slot.time} SET</span>
+                    {isShortage && (
+                      <span className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold animate-pulse">
+                        선수부족
+                      </span>
+                    )}
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-full ${isShortage ? 'bg-red-100 text-red-600' : 'bg-slate-200 text-slate-500'}`}>
+                    {slot.players.length} / 10명
+                  </span>
                 </div>
                 <div className="space-y-2">
                   {slot.players.map((p) => (
@@ -176,7 +216,7 @@ function AssignContent() {
                       <span className="text-sm font-bold text-slate-700">{isEditable && <span className="mr-2 text-slate-300">:::</span>}{p.name}</span>
                     </div>
                   ))}
-                  {slot.players.length === 0 && <div className="py-8 border-2 border-dashed border-slate-200 rounded-2xl text-center text-[10px] text-slate-300 font-bold italic">여기로 드래그</div>}
+                  {slot.players.length === 0 && <div className="py-8 border-2 border-dashed border-slate-200 rounded-2xl text-center text-[10px] text-slate-300 font-bold italic uppercase">Drop Player Here</div>}
                 </div>
               </div>
             );
@@ -186,7 +226,7 @@ function AssignContent() {
         {isEditable && (
           <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] p-6 bg-gradient-to-t from-white via-white to-transparent">
             <button onClick={handleConfirm} disabled={saving} className="w-full bg-blue-600 text-white py-5 rounded-[30px] font-black text-xl shadow-2xl active:scale-95 transition-all">
-              {saving ? '데이터 저장 중...' : '최종 스쿼드 확정 게시'}
+              {saving ? '저장 중...' : '최종 스쿼드 확정 게시'}
             </button>
           </div>
         )}
@@ -196,5 +236,5 @@ function AssignContent() {
 }
 
 export default function AssignPage() {
-  return <Suspense fallback={<div className="p-10 text-center font-bold text-slate-400">Loading...</div>}><AssignContent /></Suspense>;
+  return <Suspense fallback={<div className="p-10 text-center font-bold text-slate-400 uppercase tracking-widest">Loading...</div>}><AssignContent /></Suspense>;
 }
