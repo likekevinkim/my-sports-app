@@ -1,65 +1,53 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useRouter } from 'next/navigation';
+
+export default function LandingPage() {
+  const router = useRouter();
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-slate-100 flex justify-center items-center">
+      <div className="w-full max-w-[430px] bg-white min-h-screen shadow-2xl flex flex-col items-center justify-center p-8 text-center">
+        
+        {/* 상단 로고/아이콘 영역 */}
+        <div className="mb-10 animate-bounce">
+          <span className="text-8xl">⚽</span>
+        </div>
+
+        {/* 메인 타이틀 */}
+        <div className="mb-12">
+          <p className="text-blue-600 font-black text-sm tracking-widest mb-2 uppercase">Seoul Amateur Football</p>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-tight">
+            한성백제 FC<br />
+            <span className="text-blue-600">스쿼드 관리</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-4 text-slate-400 font-medium text-sm">
+            공정한 배정, 즐거운 축구<br />
+            지금 바로 시작해보세요.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        {/* 시작 버튼 영역 */}
+        <div className="w-full space-y-4">
+          <button 
+            onClick={() => router.push('/login')}
+            className="w-full bg-slate-900 text-white py-5 rounded-[28px] font-black text-lg shadow-xl shadow-slate-200 active:scale-[0.98] transition-all"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            로그인하기
+          </button>
+          
+          <button 
+            onClick={() => router.push('/signup')}
+            className="w-full bg-white text-slate-900 py-5 rounded-[28px] font-black text-lg border-2 border-slate-100 hover:bg-slate-50 active:scale-[0.98] transition-all"
           >
-            Documentation
-          </a>
+            신규 회원가입
+          </button>
         </div>
-      </main>
+
+        <p className="mt-12 text-[10px] text-slate-300 font-bold tracking-widest uppercase">
+          © 2024 Hanseong-Baekje FC
+        </p>
+      </div>
     </div>
   );
 }
